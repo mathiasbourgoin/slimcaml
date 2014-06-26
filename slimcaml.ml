@@ -1,30 +1,15 @@
-open Camlp4.PreCast
-open Syntax
-open Ast
+let array = ("array",[
+("expr", "SELF; \".\"; \"(\"; SELF; \")\"", "Array");
+("expr", "SELF; \"<-\"; expr", "Array")
+])
 
 
 
-let rec string_of_ident i = 
-  let aux = function
-    | <:ident< $lid:s$ >> -> s
-    | <:ident< $uid:s$ >> -> s
-    | <:ident< $i1$.$i2$ >> -> "" ^ (string_of_ident i1) ^ "." ^ (string_of_ident i2)
-    | <:ident< $i1$($i2$) >> -> "" ^ (string_of_ident i1) ^ " " ^ (string_of_ident i2)
-    | _ -> assert false
-  in aux i
+let all = [
+array;
+]
 
-type name 'e = { expr : 'e; tvar : string; loc : loc }
-
-let rec tvar_of_ident =
-  function
-    | <:ident< $lid:x$ >> | <:ident< $uid:x$ >> -> x
-    | <:ident< $uid:x$.$xs$ >> -> x ^ "__" ^ tvar_of_ident xs
-    | _ -> failwith "internal error in the Grammar extension" 
-
-let mk_name _loc i =
-  {expr = <:expr< $id:i$ >>; tvar = tvar_of_ident i; loc = _loc}
-
-let expr_of_string = Syntax.Gram.parse_string Syntax.expr_eoi
+let only = ref []
 
 let delete_rules = ref []
 
@@ -32,13 +17,8 @@ let replace_rules = ref []
 
 let globals = ref []
 
-let gen (_loc, e,l,e2) =
-let glob = string_of_ident e in
-let rule =     (List.fold_left (fun a b -> (
-      if a <> "" && b <> "" then
-        a^" ; "^ b
-      else 
-        a ^ b)) "" l)in
+let gen l =
+List.iter (fun (glob,rule,info) ->
   let del = Printf.sprintf "DELETE_RULE Gram %s : %s  END" glob rule
  in
 delete_rules := del :: !delete_rules;
@@ -46,47 +26,50 @@ if not (List.mem glob !globals) then
 globals := glob :: !globals;
 let new_rule =
 Printf.sprintf "%s : \n[[ %s -> print_endline (%s^\" : not available with this subsyntax of OCaml\"); exit 0"
-glob rule (string_of_ident e2) in
-replace_rules := new_rule :: !replace_rules;
-<:expr<>>
+glob rule info in
+replace_rules := new_rule :: !replace_rules)
+l
 
 
-    EXTEND Gram
-    GLOBAL: str_item expr;
+
+let list_of_info info =
+List.find (fun (i,l) -> info = i) all
 
 
-str_item:
-[[
-"BEGIN"; l = LIST0 expr; "END" -> 
-print_endline "open Camlp4.PreCast
-open Syntax
-open Ast\n\n";
+let print_header oc =
+output_string oc "open Camlp4.PreCast\nopen Syntax\nopen Ast\n\n"
 
-List.iter print_endline !delete_rules;
+let print_body oc =
+List.iter (fun s -> output_string oc s) !delete_rules;
+output_string oc  (Printf.sprintf "EXTEND Gram\nGLOBAL:%s;" (List.fold_left (fun a b -> a ^" "^b) "" !globals));
+List.iter (fun s -> output_string oc s) !replace_rules
 
-Printf.printf "EXTEND Gram\nGLOBAL:%s;" (List.fold_left (fun a b -> a ^" "^b) "" !globals);
+let print_end oc =
+output_string oc "END\n";
+close_out oc
 
-List.iter print_endline !replace_rules;
+let _ = 
+let args = 
+List.map (fun (info,l) -> 
+(("-disable-"^(String.lowercase info)),
+Arg.Unit (fun () -> only := (list_of_info info):: !only), ("disable "^(String.lowercase info))))
+ all in
 
-print_endline "\n\nEND";
-<:str_item< >>
-]];
-  
-expr: AFTER "top"
-    [
-	
-      [e=ident; ":";  l = LIST0 elems; "->"; e2=ident ->  
-  gen (_loc,e,l,e2)
-]
-];
+Arg.parse args (fun s -> ()) "";
+match !only with
+| [] -> 
+List.iter (fun (i,l) -> gen l; 
+let oc = open_out ("pp_disable_"^i^".ml") in
+print_header oc;
+print_body oc;
+print_end oc;
+) all
+| _ -> (
+let oc = open_out ("pp_disable_custom.ml") in
+print_header oc;
+print_body oc;
+print_end oc)
 
-elems:
-  [[
-    u = ident -> (string_of_ident u)
-| s=STRING->  ("\""^s^ "\"")
-| ";"  -> ""
 
-]];
 
-END
 
