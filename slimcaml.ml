@@ -1,6 +1,6 @@
 let array = ("array",[
+("expr", "SELF; \"<-\"; expr LEVEL \"top\"", "Array");
 ("expr", "SELF; \".\"; \"(\"; SELF; \")\"", "Array");
-("expr", "SELF; \"<-\"; expr", "Array")
 ])
 
 
@@ -25,7 +25,7 @@ delete_rules := del :: !delete_rules;
 if not (List.mem glob !globals) then
 globals := glob :: !globals;
 let new_rule =
-Printf.sprintf "%s : \n[[ %s -> print_endline (%s^\" : not available with this subsyntax of OCaml\"); exit 0"
+Printf.sprintf "%s : \n[[ %s -> Printf.eprintf \"%s : not available with this subsyntax of OCaml\n\" ; exit 42]];\n"
 glob rule info in
 replace_rules := new_rule :: !replace_rules)
 l
@@ -40,9 +40,9 @@ let print_header oc =
 output_string oc "open Camlp4.PreCast\nopen Syntax\nopen Ast\n\n"
 
 let print_body oc =
-List.iter (fun s -> output_string oc s) !delete_rules;
-output_string oc  (Printf.sprintf "EXTEND Gram\nGLOBAL:%s;" (List.fold_left (fun a b -> a ^" "^b) "" !globals));
-List.iter (fun s -> output_string oc s) !replace_rules
+List.iter (fun s -> output_string oc (s^"\n")) !delete_rules;
+output_string oc  (Printf.sprintf "EXTEND Gram\nGLOBAL:%s;\n\n" (List.fold_left (fun a b -> a ^" "^b) "" !globals));
+List.iter (fun s -> output_string oc (s^"\n")) !replace_rules
 
 let print_end oc =
 output_string oc "END\n";
