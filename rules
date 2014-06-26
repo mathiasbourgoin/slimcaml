@@ -1,4 +1,0 @@
-BEGIN
-expr : SELF; "."; "("; SELF; ")" -> Array;
-expr: SELF; "<-"; expr  -> Array
-END
