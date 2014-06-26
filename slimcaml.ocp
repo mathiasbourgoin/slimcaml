@@ -1,0 +1,8 @@
+author = ["Mathias Bourgoin <mathias.bourgoin@lip6.fr>]
+descr = ["Syntax extension generator to delete OCaml syntax rules"]
+
+ begin program "slimcaml"
+      files = ["slimcaml.ml"]
+      requires = []
+      opam_depends = []
+end
